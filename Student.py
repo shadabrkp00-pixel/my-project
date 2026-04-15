@@ -62,7 +62,7 @@ def register_user(username, password, name):
 # ─────────────────────────────────────────────
 st.set_page_config(
     page_title="Student Performance Predictor",
-    page_icon="🎓",
+    page_icon="",
     layout="centered"
 )
 
@@ -357,19 +357,19 @@ def show_main_app():
         )
         st.markdown(f"`Role: {user['role']}`")
         st.divider()
-        if st.button("🚪 Sign Out"):
+        if st.button(" Sign Out"):
             st.session_state.logged_in = False
             st.session_state.username  = ""
             st.session_state.user_info = {}
             st.rerun()
 
     # ── Page ─────────────────────────────────
-    st.title("🎓 Student Performance Predictor")
+    st.title(" Student Performance Predictor")
     st.caption("Predict exam score using a Random Forest model")
 
     rf_model, scaler, numeric_features, feature_cols, mae, rmse, r2 = train_model()
 
-    with st.expander("📊 Model Metrics"):
+    with st.expander(" Model Metrics"):
         c1, c2, c3 = st.columns(3)
         c1.metric("MAE",  mae)
         c2.metric("RMSE", rmse)
@@ -402,7 +402,7 @@ def show_main_app():
         "Female":0, "Male":1
     }
 
-    if st.button("🔮 Predict Score", use_container_width=True):
+    if st.button(" Predict Score", use_container_width=True):
         all_inputs = [hours_studied, attendance, sleep_hours, previous_scores,
                       parental_involvement, access_to_resources, motivation_level,
                       internet_access, teacher_quality, parental_education, gender]
@@ -428,11 +428,11 @@ def show_main_app():
 
             score  = round(float(np.clip(rf_model.predict(new_student)[0], 0, 100)), 1)
             grade  = "A" if score>=80 else "B" if score>=65 else "C" if score>=50 else "D"
-            status = "Pass ✅" if score >= 50 else "Fail ❌"
+            status = "Pass " if score >= 50 else "Fail "
 
             top_feature   = feature_cols[rf_model.feature_importances_.argmax()]
             student_value = new_student.iloc[0][top_feature]
-            factor_status = "Above average — keep it up 👍" if student_value >= 0 else "Below average — focus here ⚠️"
+            factor_status = "Above average — keep it up " if student_value >= 0 else "Below average — focus here "
 
             what_if = new_student.copy()
             what_if["Hours_Studied"] += 1
@@ -440,7 +440,7 @@ def show_main_app():
             gain     = round(improved - score, 1)
 
             st.divider()
-            st.subheader("📋 Result")
+            st.subheader(" Result")
 
             r1, r2_col, r3 = st.columns(3)
             r1.metric("Predicted Score", f"{score} / 100")
@@ -451,9 +451,9 @@ def show_main_app():
             st.info(f"Top Factor: **{top_feature.replace('_', ' ')}** — {factor_status}")
 
             if gain > 0:
-                st.success(f"💡 Tip: Studying 1 more hour/day could raise your score to {improved} (+{gain} pts)")
+                st.success(f" Tip: Studying 1 more hour/day could raise your score to {improved} (+{gain} pts)")
             else:
-                st.success("💡 Tip: You are already maximizing your study hours!")
+                st.success(" Tip: You are already maximizing your study hours!")
 
 
 # ─────────────────────────────────────────────
