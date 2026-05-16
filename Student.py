@@ -9,7 +9,6 @@ from datetime import datetime
 
 st.set_page_config(
     page_title="Student Performance Predictor",
-    page_icon="🎓",
     layout="centered"
 )
 
@@ -190,7 +189,7 @@ def login_card():
 
     st.markdown("""
     <div class="login-wrap">
-        <div class="login-icon">🎓</div>
+       
         <div class="login-title">Student Portal</div>
         <div class="login-sub">Sign in to access the performance predictor</div>
     </div>
@@ -199,7 +198,7 @@ def login_card():
     # inputs sit below the decorative header card
     with st.container():
         if st.session_state.locked_out:
-            st.markdown('<div class="lockout-box">🔒 Too many failed attempts. Refresh the page to try again.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="lockout-box"> Too many failed attempts. Refresh the page to try again.</div>', unsafe_allow_html=True)
             return
 
         username = st.text_input("Username", placeholder="admin", key="login_user")
@@ -343,7 +342,7 @@ def grade_badge(grade, status):
 def show_history():
     if not st.session_state.prediction_history:
         return
-    with st.expander(f"📋 Prediction History ({len(st.session_state.prediction_history)} runs)"):
+    with st.expander(f" Prediction History ({len(st.session_state.prediction_history)} runs)"):
         hist_df = pd.DataFrame(st.session_state.prediction_history)
         st.dataframe(hist_df, use_container_width=True, hide_index=True)
         if st.button("Clear History"):
@@ -358,7 +357,7 @@ def main_app():
 
     # sidebar
     with st.sidebar:
-        st.markdown("### 👤 Admin")
+        st.markdown("###  Admin")
         if st.session_state.last_login:
             st.caption(f"Last login: {st.session_state.last_login}")
         st.divider()
@@ -370,11 +369,11 @@ def main_app():
         st.metric("R²",  r2,   help="Explained variance — closer to 1 is better")
         st.divider()
 
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button(" Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.rerun()
 
-    st.title("🎓 Student Performance Predictor")
+    st.title(" Student Performance Predictor")
     st.caption("Random Forest model · fill in the form below and hit Predict")
 
     st.subheader("Student Details")
@@ -429,7 +428,7 @@ def main_app():
             # top contributing factor
             top_feature = feature_cols[rf_model.feature_importances_.argmax()]
             student_val = new_student.iloc[0][top_feature]
-            factor_msg  = "above average — keep it up 👍" if student_val >= 0 else "below average — focus here ⚠️"
+            factor_msg  = "above average — keep it up " if student_val >= 0 else "below average — focus here "
 
             # save to history
             st.session_state.prediction_history.append({
@@ -451,12 +450,12 @@ def main_app():
 
             # what-if tip
             if gain > 0:
-                st.success(f"💡 Studying **1 more hour/day** could push your score to **{improved}** (+{gain} pts)")
+                st.success(f" Studying **1 more hour/day** could push your score to **{improved}** (+{gain} pts)")
             else:
-                st.success("💡 You're already maximising study hours — great work!")
+                st.success(" You're already maximising study hours — great work!")
 
             # top factor callout
-            st.info(f"🔍 Top influencing factor: **{top_feature.replace('_', ' ')}** — {factor_msg}")
+            st.info(f" Top influencing factor: **{top_feature.replace('_', ' ')}** — {factor_msg}")
 
     st.divider()
     show_history()
