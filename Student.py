@@ -5,338 +5,379 @@ from sklearn.preprocessing import OrdinalEncoder, LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from datetime import datetime
 
-st.set_page_config(page_title="Student Performance Predictor", layout="centered")
+st.set_page_config(
+    page_title="Student Performance Predictor",
+    page_icon="🎓",
+    layout="centered"
+)
 
-# ── Credentials (change as needed) ───────────────────────────────────────────
-VALID_USERNAME = "admin"
-VALID_PASSWORD = "1234"
+# credentials — change these as needed
+USERNAME = "admin"
+PASSWORD = "1234"
+MAX_ATTEMPTS = 3
 
-# ── Session state init ────────────────────────────────────────────────────────
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "login_error" not in st.session_state:
-    st.session_state.login_error = False
+# session state defaults
+defaults = {
+    "logged_in": False,
+    "login_attempts": 0,
+    "locked_out": False,
+    "last_login": None,
+    "prediction_history": [],
+}
+for key, val in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  LOGIN PAGE
-# ══════════════════════════════════════════════════════════════════════════════
-def show_login():
+# ---- login card styles ----
+
+def inject_login_styles():
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@300;400;500&display=swap');
 
-    /* Hide Streamlit chrome */
-    #MainMenu, footer, header { visibility: hidden; }
-    .block-container { padding: 0 !important; max-width: 100% !important; }
+    #MainMenu, footer { visibility: hidden; }
 
-    /* Full-screen background */
-    .stApp {
-        background: #0a0a0f;
-        min-height: 100vh;
-    }
+    .stApp { background: #0d0d14; }
 
-    /* Animated gradient orbs */
-    .bg-orb {
+    /* animated mesh background */
+    .stApp::before {
+        content: '';
         position: fixed;
-        border-radius: 50%;
-        filter: blur(80px);
-        opacity: 0.35;
-        animation: drift 8s ease-in-out infinite alternate;
+        inset: 0;
+        background:
+            radial-gradient(ellipse 60% 50% at 20% 20%, rgba(99,57,255,0.22) 0%, transparent 70%),
+            radial-gradient(ellipse 50% 60% at 80% 80%, rgba(255,45,140,0.18) 0%, transparent 70%),
+            radial-gradient(ellipse 40% 40% at 60% 30%, rgba(0,200,255,0.12) 0%, transparent 70%);
         pointer-events: none;
         z-index: 0;
-    }
-    .orb1 { width:500px; height:500px; background:#6c3fff; top:-120px; left:-100px; animation-delay:0s; }
-    .orb2 { width:400px; height:400px; background:#ff3cac; bottom:-100px; right:-80px; animation-delay:2s; }
-    .orb3 { width:300px; height:300px; background:#00d4ff; top:40%; left:40%; animation-delay:4s; }
-
-    @keyframes drift {
-        0%   { transform: translate(0,0) scale(1); }
-        100% { transform: translate(30px,20px) scale(1.08); }
+        animation: bgShift 12s ease-in-out infinite alternate;
     }
 
-    /* Card wrapper */
-    .login-card {
+    @keyframes bgShift {
+        0%   { opacity: 1; transform: scale(1); }
+        100% { opacity: 0.8; transform: scale(1.04); }
+    }
+
+    .login-wrap {
         position: relative;
-        z-index: 10;
-        background: rgba(255,255,255,0.04);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
-        border: 1px solid rgba(255,255,255,0.10);
-        border-radius: 28px;
-        padding: 52px 48px 12px;
-        max-width: 440px;
-        margin: 72px auto 0;
-        box-shadow: 0 32px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.05);
-        animation: fadeUp 0.7s cubic-bezier(.22,1,.36,1) both;
+        z-index: 1;
+        max-width: 420px;
+        margin: 60px auto 0;
+        padding: 44px 40px 36px;
+        background: rgba(255,255,255,0.045);
+        border: 1px solid rgba(255,255,255,0.09);
+        border-radius: 24px;
+        box-shadow: 0 40px 100px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+        animation: slideUp 0.55s cubic-bezier(0.22,1,0.36,1) both;
     }
 
-    @keyframes fadeUp {
-        from { opacity:0; transform:translateY(32px); }
-        to   { opacity:1; transform:translateY(0); }
+    @keyframes slideUp {
+        from { opacity: 0; transform: translateY(28px); }
+        to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* Badge */
-    .badge {
-        display: inline-block;
-        background: linear-gradient(135deg,#6c3fff,#ff3cac);
-        color: #fff;
-        font-family: 'DM Sans', sans-serif;
-        font-size: 11px;
-        font-weight: 500;
-        letter-spacing: 2px;
-        text-transform: uppercase;
-        padding: 5px 14px;
-        border-radius: 99px;
-        margin-bottom: 20px;
+    .login-icon {
+        font-size: 36px;
+        margin-bottom: 12px;
     }
 
     .login-title {
-        font-family: 'Playfair Display', serif;
-        font-size: 40px;
-        font-weight: 900;
-        color: #ffffff;
-        line-height: 1.1;
-        margin: 0 0 6px;
-    }
-    .login-sub {
-        font-family: 'DM Sans', sans-serif;
-        font-size: 14px;
-        color: rgba(255,255,255,0.40);
-        margin: 0 0 32px;
-        font-weight: 300;
+        font-family: 'Syne', sans-serif;
+        font-size: 32px;
+        font-weight: 800;
+        color: #fff;
+        margin: 0 0 4px;
+        letter-spacing: -0.5px;
     }
 
-    /* Streamlit input overrides */
-    .stTextInput > div > div > input {
-        background: rgba(255,255,255,0.06) !important;
-        border: 1px solid rgba(255,255,255,0.12) !important;
-        border-radius: 14px !important;
-        color: #ffffff !important;
-        font-family: 'DM Sans', sans-serif !important;
-        font-size: 15px !important;
-        padding: 14px 18px !important;
-        transition: border-color 0.2s, box-shadow 0.2s !important;
+    .login-sub {
+        font-family: 'Inter', sans-serif;
+        font-size: 13px;
+        color: rgba(255,255,255,0.38);
+        margin: 0 0 28px;
     }
-    .stTextInput > div > div > input:focus {
-        border-color: #6c3fff !important;
-        box-shadow: 0 0 0 3px rgba(108,63,255,0.25) !important;
-        outline: none !important;
+
+    /* style the streamlit inputs */
+    .stTextInput input {
+        background: rgba(255,255,255,0.05) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: 12px !important;
+        color: #fff !important;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 14px !important;
+        padding: 12px 16px !important;
+        transition: all 0.2s !important;
     }
-    .stTextInput > div > div > input::placeholder {
-        color: rgba(255,255,255,0.22) !important;
+    .stTextInput input:focus {
+        border-color: #6339ff !important;
+        box-shadow: 0 0 0 3px rgba(99,57,255,0.2) !important;
     }
+    .stTextInput input::placeholder { color: rgba(255,255,255,0.2) !important; }
     .stTextInput label {
-        font-family: 'DM Sans', sans-serif !important;
+        color: rgba(255,255,255,0.45) !important;
         font-size: 11px !important;
         font-weight: 500 !important;
-        letter-spacing: 1.4px !important;
+        letter-spacing: 1px !important;
         text-transform: uppercase !important;
-        color: rgba(255,255,255,0.45) !important;
+        font-family: 'Inter', sans-serif !important;
     }
 
-    /* Streamlit button overrides */
+    /* sign in button */
+    div[data-testid="stButton"] > button[kind="primary"],
     div[data-testid="stButton"] > button {
-        width: 100% !important;
-        background: linear-gradient(135deg,#6c3fff 0%,#ff3cac 100%) !important;
+        background: linear-gradient(135deg, #6339ff, #c93fff) !important;
         color: #fff !important;
         border: none !important;
-        border-radius: 14px !important;
-        font-family: 'DM Sans', sans-serif !important;
-        font-size: 15px !important;
+        border-radius: 12px !important;
+        font-family: 'Inter', sans-serif !important;
         font-weight: 500 !important;
-        padding: 14px 0 !important;
-        letter-spacing: 0.5px !important;
-        cursor: pointer !important;
+        font-size: 14px !important;
+        padding: 12px !important;
+        width: 100% !important;
         transition: opacity 0.2s, transform 0.15s !important;
-        margin-top: 6px !important;
+        letter-spacing: 0.3px !important;
     }
     div[data-testid="stButton"] > button:hover {
-        opacity: 0.85 !important;
+        opacity: 0.82 !important;
         transform: translateY(-1px) !important;
     }
 
-    /* Error box */
-    .err-box {
-        background: rgba(255,60,100,0.12);
-        border: 1px solid rgba(255,60,100,0.35);
-        border-radius: 12px;
-        padding: 12px 16px;
-        font-family: 'DM Sans', sans-serif;
+    .attempt-bar {
+        display: flex;
+        gap: 6px;
+        margin: 8px 0 0;
+    }
+    .attempt-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.12);
+    }
+    .attempt-dot.used { background: #ff4d6d; }
+
+    .lockout-box {
+        background: rgba(255,30,60,0.1);
+        border: 1px solid rgba(255,30,60,0.3);
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-family: 'Inter', sans-serif;
         font-size: 13px;
-        color: #ff7096;
-        margin-top: 10px;
+        color: #ff6b81;
         text-align: center;
+        margin-top: 10px;
     }
 
-    /* Hint + footer */
-    .hint-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin: 22px 0 0;
+    .divider-line {
+        border: none;
+        border-top: 1px solid rgba(255,255,255,0.07);
+        margin: 20px 0 14px;
     }
-    .hint-line { flex:1; height:1px; background:rgba(255,255,255,0.08); }
-    .hint-text {
-        font-family: 'DM Sans', sans-serif;
-        font-size: 11px;
-        color: rgba(255,255,255,0.25);
-        white-space: nowrap;
-    }
+
     .login-footer {
-        font-family: 'DM Sans', sans-serif;
+        font-family: 'Inter', sans-serif;
         font-size: 11px;
-        color: rgba(255,255,255,0.18);
+        color: rgba(255,255,255,0.2);
         text-align: center;
-        margin-top: 18px;
-        padding-bottom: 8px;
     }
     </style>
+    """, unsafe_allow_html=True)
 
-    <!-- background orbs -->
-    <div class="bg-orb orb1"></div>
-    <div class="bg-orb orb2"></div>
-    <div class="bg-orb orb3"></div>
 
-    <div class="login-card">
-        <div class="badge">✦ Student Portal</div>
-        <div class="login-title">Welcome<br>Back.</div>
-        <div class="login-sub">Sign in to access the predictor</div>
+def login_card():
+    inject_login_styles()
+
+    st.markdown("""
+    <div class="login-wrap">
+        <div class="login-icon">🎓</div>
+        <div class="login-title">Student Portal</div>
+        <div class="login-sub">Sign in to access the performance predictor</div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Inputs rendered inside the visual card area
+    # inputs sit below the decorative header card
     with st.container():
-        # Nudge inputs to overlap with the card visually
-        st.markdown("""
-        <style>
-        section[data-testid="stMain"] > div > div > div > div:nth-child(2) {
-            max-width: 440px;
-            margin: 0 auto;
-            padding: 0 48px 32px;
-            background: rgba(255,255,255,0.04);
-            backdrop-filter: blur(24px);
-            border: 1px solid rgba(255,255,255,0.10);
-            border-top: none;
-            border-radius: 0 0 28px 28px;
-            margin-top: -4px;
-        }
-        </style>
-        """, unsafe_allow_html=True)
+        if st.session_state.locked_out:
+            st.markdown('<div class="lockout-box">🔒 Too many failed attempts. Refresh the page to try again.</div>', unsafe_allow_html=True)
+            return
 
-        username = st.text_input("Username", placeholder="e.g.  admin", key="usr")
-        password = st.text_input("Password", placeholder="••••••••", type="password", key="pwd")
+        username = st.text_input("Username", placeholder="admin", key="login_user")
+        password = st.text_input("Password", placeholder="••••••••", type="password", key="login_pass")
 
-        if st.button("Sign In  →", use_container_width=True):
-            if username == VALID_USERNAME and password == VALID_PASSWORD:
+        # show remaining attempts as dots
+        if st.session_state.login_attempts > 0:
+            dots = ""
+            for i in range(MAX_ATTEMPTS):
+                cls = "attempt-dot used" if i < st.session_state.login_attempts else "attempt-dot"
+                dots += f'<div class="{cls}"></div>'
+            remaining = MAX_ATTEMPTS - st.session_state.login_attempts
+            st.markdown(
+                f'<div style="font-family:Inter,sans-serif;font-size:11px;color:rgba(255,100,100,0.8);margin-bottom:4px;">'
+                f'Wrong password — {remaining} attempt{"s" if remaining != 1 else ""} left</div>'
+                f'<div class="attempt-bar">{dots}</div>',
+                unsafe_allow_html=True
+            )
+
+        if st.button("Sign In →", use_container_width=True):
+            if username == USERNAME and password == PASSWORD:
                 st.session_state.logged_in = True
-                st.session_state.login_error = False
+                st.session_state.login_attempts = 0
+                st.session_state.last_login = datetime.now().strftime("%d %b %Y, %I:%M %p")
                 st.rerun()
             else:
-                st.session_state.login_error = True
+                st.session_state.login_attempts += 1
+                if st.session_state.login_attempts >= MAX_ATTEMPTS:
+                    st.session_state.locked_out = True
+                st.rerun()
 
-        if st.session_state.login_error:
-            st.markdown('<div class="err-box">⚠ Incorrect username or password. Try again.</div>',
-                        unsafe_allow_html=True)
-
-        st.markdown("""
-        <div class="hint-row">
-            <div class="hint-line"></div>
-            <div class="hint-text">default credentials: admin / 1234</div>
-            <div class="hint-line"></div>
-        </div>
-        <div class="login-footer">© 2025 Student Performance Predictor</div>
-        """, unsafe_allow_html=True)
+        st.markdown('<hr class="divider-line">', unsafe_allow_html=True)
+        st.markdown('<div class="login-footer">Default credentials: admin / 1234 &nbsp;·&nbsp; © 2025 SPP</div>', unsafe_allow_html=True)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  MAIN APP
-# ══════════════════════════════════════════════════════════════════════════════
-def show_app():
+# ---- model training (cached so it only runs once) ----
+
+@st.cache_resource
+def train_model():
+    df = pd.read_csv("StudentPerformanceFactors.csv")
+
+    df = df.drop(columns=[
+        "Extracurricular_Activities", "Tutoring_Sessions", "Family_Income",
+        "School_Type", "Peer_Influence", "Physical_Activity",
+        "Learning_Disabilities", "Distance_from_Home",
+        "Parental_Involvement", "Teacher_Quality", "Parental_Education_Level",
+        "Sleep_Hours"
+    ])
+
+    ordinal_cols = ["Access_to_Resources", "Motivation_Level", "Internet_Access"]
+    categories = [
+        ["Low", "Medium", "High"],
+        ["Low", "Medium", "High"],
+        ["No", "Yes"]
+    ]
+
+    for col in ordinal_cols:
+        df[col] = df[col].astype(str).str.strip()
+        valid = df[df[col] != "nan"][col]
+        mode_val = valid.mode()[0] if not valid.empty else "Medium"
+        df[col] = df[col].replace("nan", mode_val)
+
+    encoder = OrdinalEncoder(categories=categories, handle_unknown="use_encoded_value", unknown_value=-1)
+    df[ordinal_cols] = encoder.fit_transform(df[ordinal_cols])
+
+    le = LabelEncoder()
+    df["Gender"] = le.fit_transform(df["Gender"])
+
+    X = df.drop("Exam_Score", axis=1)
+    y = df["Exam_Score"]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    numeric_features = X.select_dtypes(include=["int64", "float64"]).columns
+    scaler = StandardScaler()
+    X_train[numeric_features] = scaler.fit_transform(X_train[numeric_features])
+    X_test[numeric_features]  = scaler.transform(X_test[numeric_features])
+
+    rf = RandomForestRegressor(n_estimators=100, bootstrap=True, max_samples=0.8, max_features=5, random_state=42)
+    rf.fit(X_train, y_train)
+
+    preds = rf.predict(X_test)
+    mae  = round(mean_absolute_error(y_test, preds), 2)
+    rmse = round(np.sqrt(mean_squared_error(y_test, preds)), 2)
+    r2   = round(r2_score(y_test, preds), 4)
+
+    return rf, scaler, numeric_features, X.columns, mae, rmse, r2
+
+
+# ---- score gauge (SVG donut) ----
+
+def score_gauge(score):
+    pct = score / 100
+    color = "#22c55e" if score >= 80 else "#f59e0b" if score >= 50 else "#ef4444"
+    circumference = 2 * 3.14159 * 54
+    dash = pct * circumference
+
+    st.markdown(f"""
+    <div style="display:flex;justify-content:center;margin:16px 0 8px;">
+        <svg width="140" height="140" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="10"/>
+            <circle cx="60" cy="60" r="54" fill="none" stroke="{color}" stroke-width="10"
+                stroke-dasharray="{dash:.1f} {circumference:.1f}"
+                stroke-dashoffset="{circumference/4:.1f}"
+                stroke-linecap="round"
+                style="transition: stroke-dasharray 1s ease;">
+            </circle>
+            <text x="60" y="56" text-anchor="middle" fill="#fff"
+                font-family="Syne,sans-serif" font-size="22" font-weight="800">{score}</text>
+            <text x="60" y="72" text-anchor="middle" fill="rgba(255,255,255,0.4)"
+                font-family="Inter,sans-serif" font-size="9">out of 100</text>
+        </svg>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ---- grade badge ----
+
+def grade_badge(grade, status):
+    colors = {"A": "#22c55e", "B": "#3b82f6", "C": "#f59e0b", "D": "#ef4444"}
+    color = colors.get(grade, "#888")
+    status_color = "#22c55e" if status == "Pass" else "#ef4444"
+
+    st.markdown(f"""
+    <div style="display:flex;gap:10px;justify-content:center;margin:8px 0 16px;">
+        <span style="background:{color}22;border:1px solid {color}55;color:{color};
+            padding:5px 18px;border-radius:99px;font-family:Inter,sans-serif;
+            font-weight:600;font-size:14px;letter-spacing:0.5px;">
+            Grade {grade}
+        </span>
+        <span style="background:{status_color}22;border:1px solid {status_color}55;color:{status_color};
+            padding:5px 18px;border-radius:99px;font-family:Inter,sans-serif;
+            font-weight:600;font-size:14px;letter-spacing:0.5px;">
+            {status}
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ---- prediction history table ----
+
+def show_history():
+    if not st.session_state.prediction_history:
+        return
+    with st.expander(f"📋 Prediction History ({len(st.session_state.prediction_history)} runs)"):
+        hist_df = pd.DataFrame(st.session_state.prediction_history)
+        st.dataframe(hist_df, use_container_width=True, hide_index=True)
+        if st.button("Clear History"):
+            st.session_state.prediction_history = []
+            st.rerun()
+
+
+# ---- main app ----
+
+def main_app():
+    rf_model, scaler, numeric_features, feature_cols, mae, rmse, r2 = train_model()
+
+    # sidebar
     with st.sidebar:
-        st.markdown("### 👤 Logged in as `admin`")
-        if st.button("🚪 Logout"):
+        st.markdown("### 👤 Admin")
+        if st.session_state.last_login:
+            st.caption(f"Last login: {st.session_state.last_login}")
+        st.divider()
+
+        # model metrics in sidebar instead of taking up main space
+        st.markdown("**Model Performance**")
+        st.metric("MAE", mae,  help="Mean Absolute Error — lower is better")
+        st.metric("RMSE", rmse, help="Root Mean Squared Error")
+        st.metric("R²",  r2,   help="Explained variance — closer to 1 is better")
+        st.divider()
+
+        if st.button("🚪 Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.rerun()
 
-    st.title("Student Performance Predictor")
-    st.caption("Predict exam score using Random Forest model")
+    st.title("🎓 Student Performance Predictor")
+    st.caption("Random Forest model · fill in the form below and hit Predict")
 
-    @st.cache_resource
-    def train_model():
-        df = pd.read_csv("StudentPerformanceFactors.csv")
-
-        df = df.drop(columns=[
-            "Extracurricular_Activities", "Tutoring_Sessions", "Family_Income",
-            "School_Type", "Peer_Influence", "Physical_Activity",
-            "Learning_Disabilities", "Distance_from_Home",
-            "Parental_Involvement", "Teacher_Quality", "Parental_Education_Level",
-            "Sleep_Hours"
-        ])
-
-        ordinal_cols = [
-            "Access_to_Resources", "Motivation_Level",
-            "Internet_Access"
-        ]
-        categories = [
-            ["Low", "Medium", "High"],
-            ["Low", "Medium", "High"],
-            ["No", "Yes"]
-        ]
-
-        for col in ordinal_cols:
-            df[col] = df[col].astype(str).str.strip()
-            valid    = df[df[col] != "nan"][col]
-            mode_val = valid.mode()[0] if not valid.empty else "Medium"
-            df[col]  = df[col].replace("nan", mode_val)
-
-        encoder = OrdinalEncoder(
-            categories=categories,
-            handle_unknown="use_encoded_value",
-            unknown_value=-1
-        )
-        df[ordinal_cols] = encoder.fit_transform(df[ordinal_cols])
-
-        le = LabelEncoder()
-        df["Gender"] = le.fit_transform(df["Gender"])
-
-        X = df.drop("Exam_Score", axis=1)
-        y = df["Exam_Score"]
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-        numeric_features = X.select_dtypes(include=["int64", "float64"]).columns
-        scaler = StandardScaler()
-        X_train[numeric_features] = scaler.fit_transform(X_train[numeric_features])
-        X_test[numeric_features]  = scaler.transform(X_test[numeric_features])
-
-        rf = RandomForestRegressor(
-            n_estimators=100,
-            bootstrap=True,
-            max_samples=0.8,
-            max_features=5,
-            random_state=42
-        )
-        rf.fit(X_train, y_train)
-
-        preds = rf.predict(X_test)
-        mae   = round(mean_absolute_error(y_test, preds), 2)
-        rmse  = round(np.sqrt(mean_squared_error(y_test, preds)), 2)
-        r2    = round(r2_score(y_test, preds), 4)
-
-        return rf, scaler, numeric_features, X.columns, mae, rmse, r2
-
-    rf_model, scaler, numeric_features, feature_cols, mae, rmse, r2 = train_model()
-
-    with st.expander("Model Metrics"):
-        c1, c2, c3 = st.columns(3)
-        c1.metric("MAE",  mae)
-        c2.metric("RMSE", rmse)
-        c3.metric("R2",   r2)
-
-    st.divider()
-    st.subheader("Enter Student Details")
-
+    st.subheader("Student Details")
     col1, col2 = st.columns(2)
 
     with col1:
@@ -351,15 +392,14 @@ def show_app():
         gender              = st.selectbox("Gender",              ["Female", "Male", "Other"], index=None, placeholder="Select...")
 
     encode_map = {
-        "Low":0, "Medium":1, "High":2,
-        "No":0,  "Yes":1,
-        "Female":0, "Male":1
+        "Low": 0, "Medium": 1, "High": 2,
+        "No": 0, "Yes": 1,
+        "Female": 0, "Male": 1
     }
 
-    if st.button("Predict Score", use_container_width=True):
+    if st.button("Predict Score", use_container_width=True, type="primary"):
         all_inputs = [hours_studied, attendance, previous_scores,
-                      access_to_resources, motivation_level,
-                      internet_access, gender]
+                      access_to_resources, motivation_level, internet_access, gender]
 
         if None in all_inputs:
             st.warning("Please fill in all fields before predicting.")
@@ -377,39 +417,54 @@ def show_app():
             new_student[numeric_features] = scaler.transform(new_student[numeric_features])
 
             score  = round(float(np.clip(rf_model.predict(new_student)[0], 0, 100)), 1)
-            grade  = "A" if score>=80 else "B" if score>=65 else "C" if score>=50 else "D"
+            grade  = "A" if score >= 80 else "B" if score >= 65 else "C" if score >= 50 else "D"
             status = "Pass" if score >= 50 else "Fail"
 
-            top_feature   = feature_cols[rf_model.feature_importances_.argmax()]
-            student_value = new_student.iloc[0][top_feature]
-            factor_status = "Above average — keep it up" if student_value >= 0 else "Below average — focus here"
-
+            # what-if: +1 study hour
             what_if = new_student.copy()
             what_if["Hours_Studied"] += 1
             improved = round(float(np.clip(rf_model.predict(what_if)[0], 0, 100)), 1)
-            gain     = round(improved - score, 1)
+            gain = round(improved - score, 1)
+
+            # top contributing factor
+            top_feature = feature_cols[rf_model.feature_importances_.argmax()]
+            student_val = new_student.iloc[0][top_feature]
+            factor_msg  = "above average — keep it up 👍" if student_val >= 0 else "below average — focus here ⚠️"
+
+            # save to history
+            st.session_state.prediction_history.append({
+                "Time": datetime.now().strftime("%H:%M:%S"),
+                "Score": score,
+                "Grade": grade,
+                "Status": status,
+                "Hours Studied": hours_studied,
+                "Attendance %": attendance,
+                "Prev Score": previous_scores,
+            })
 
             st.divider()
             st.subheader("Result")
 
-            r1, r2_col, r3 = st.columns(3)
-            r1.metric("Predicted Score", f"{score} / 100")
-            r2_col.metric("Grade", grade)
-            r3.metric("Status", status)
+            # visual gauge + grade badge
+            score_gauge(score)
+            grade_badge(grade, status)
 
-            st.progress(int(score))
-            st.info(f"Top Factor: **{top_feature.replace('_', ' ')}** — {factor_status}")
-
+            # what-if tip
             if gain > 0:
-                st.success(f"Tip: Studying 1 more hour/day could raise your score to {improved} (+{gain} pts)")
+                st.success(f"💡 Studying **1 more hour/day** could push your score to **{improved}** (+{gain} pts)")
             else:
-                st.success("Tip: You are already maximizing your study hours!")
+                st.success("💡 You're already maximising study hours — great work!")
+
+            # top factor callout
+            st.info(f"🔍 Top influencing factor: **{top_feature.replace('_', ' ')}** — {factor_msg}")
+
+    st.divider()
+    show_history()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  ROUTER
-# ══════════════════════════════════════════════════════════════════════════════
+# ---- router ----
+
 if st.session_state.logged_in:
-    show_app()
+    main_app()
 else:
-    show_login()
+    login_card()
