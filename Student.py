@@ -189,7 +189,7 @@ def login_card():
 
     st.markdown("""
     <div class="login-wrap">
-       
+       <div class="login-icon"></div>
         <div class="login-title">Student Portal</div>
         <div class="login-sub">Sign in to access the performance predictor</div>
     </div>
